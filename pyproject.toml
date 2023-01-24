@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "learning-pipeline-plugin"
+version = "0.1.0"
+description = ""
+authors = ["Idein Inc."]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "learning_pipeline_plugin"}]
+repository = "https://github.com/Idein/learning-pipeline-plugin"
+
+
+[tool.poetry.dependencies]
+python = ">=3.7.0, <3.8"
+actfw-core = "^2.2.0"
+requests = "^2.28.1"
+numpy = "^1.18"
+typing-extensions = "^4.4.0"
+
+
+[tool.poetry.group.dev.dependencies]
+mypy = "^0.991"
+pytest = "^7.2.0"
+pycodestyle = "^2.10.0"
+types-requests = "^2.28.11.7"
+types-pillow = "^9.4.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
