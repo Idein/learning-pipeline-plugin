@@ -1,0 +1,45 @@
+name: Learning Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.7"]
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install poetry
+      run: pipx install poetry
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'poetry'
+    - name: Install dependencies
+      run: poetry install
+    - name: Type Check
+      run: |
+        poetry run mypy learning_pipeline_plugin
+    - name: Lint
+      run: |
+        poetry run pycodestyle learning_pipeline_plugin
+    - name: Newline Check
+      run: |
+        CR_FILES=$(echo $(grep -Ul $'\r'$ `find ./ -type f -regex ".*\(Dockerfile\|\.gitignore\|\.html\|\.json\|\.md\|\.py\|\.sh\|\.ts\|\.tsx\|\.txt\|\.yml\)$" -not -wholename '*.git/*'`))
+        if [[ $CR_FILES != "" ]]; then
+          CR_FILES=($CR_FILES)
+          for f in ${CR_FILES[@]} ; do echo $f ; done
+          echo "CRLF detected." >&2;
+          exit 1;
+        fi
+    - name: Test
+      run: poetry run pytest
