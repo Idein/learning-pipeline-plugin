@@ -42,7 +42,7 @@ def main():
     collect_pipe = CollectPipe(...)
 
     prev_pipe.connect(collect_pipe)
-    collect_pipe.connect(after_pipe)
+    collect_pipe.connect(next_pipe)
 ```
 
 ## Notifier
