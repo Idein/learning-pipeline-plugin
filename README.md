@@ -1,5 +1,7 @@
 # learning-pipeline-plugin
 
+Plugin for Actcast application.
+This plugin provides a base Pipe class for selecting and collecting data.
 
 ## Usage
 
