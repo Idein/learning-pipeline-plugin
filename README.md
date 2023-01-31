@@ -1,18 +1,6 @@
 # learning-pipeline-plugin
 
 
-## Installation
-
-```console
-sudo apt-get update
-sudo apt-get install -y python3-pip python3-pil
-
-pip3 install poetry
-poetry build
-pip3 install dist/learning_pipeline_plugin-<PACKAGE_VERSION>.whl
-```
-
-
 ## Usage
 
 To collect data, create a pipe that inherits from `learning_pipeline_plugin.collect_pipe.CollectPipeBase`
