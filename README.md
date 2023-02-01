@@ -1,17 +1,7 @@
 # learning-pipeline-plugin
 
-
-## Installation
-
-```console
-sudo apt-get update
-sudo apt-get install -y python3-pip python3-pil
-
-pip3 install poetry
-poetry build
-pip3 install dist/learning_pipeline_plugin-<PACKAGE_VERSION>.whl
-```
-
+Plugin for Actcast application.
+This plugin provides a base Pipe class for selecting and collecting data.
 
 ## Usage
 
@@ -52,5 +42,43 @@ def main():
     collect_pipe = CollectPipe(...)
 
     prev_pipe.connect(collect_pipe)
-    collect_pipe.connect(after_pipe)
+    collect_pipe.connect(next_pipe)
 ```
+
+## Notifier
+
+By default, the information output by this plugin is logged as an actlog through the Notifier instance.
+Users can decide what information is output (and in what format), using a custom notifier.
+
+To customize it, define a custom notifier class inheriting from AbstractNotifier,
+and define `notify()` which gets a message as str.
+Then, instantiate and pass it to the CollectPipe constructor.
+
+Example of introducing a message length limit:
+```python
+from datetime import datetime, timezone
+import actfw_core
+from learning_pipeline_plugin.notifier import AbstractNotfier
+
+class CustomNotifier(AbstractNotfier):
+    def notify(self, message: str):
+        if len(message) > 128:
+            message = message[:128] + " <truncated>"
+        actfw_core.notify(
+            [
+                {
+                    "info": message,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+            ]
+        )
+
+def main():
+    [...]
+
+    collect_pipe = CollectPipe(
+        ...,
+        notifier=CustomNotifier()
+    )
+```
+
