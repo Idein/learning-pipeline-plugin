@@ -48,7 +48,7 @@ def main():
 ## Notifier
 
 By default, the information output by this plugin is logged as actlog through the Notifier instance.
-What information is output (and in what format) can be designed by using custom notifier.
+Users can decide what information is output (and in what format), using a custom notifier.
 
 To customize it, define a custom notifier class inheriting from AbstractNotfier,
 and define `notify()` which gets a message as str.
