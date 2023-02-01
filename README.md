@@ -50,7 +50,7 @@ def main():
 By default, the information output by this plugin is logged as an actlog through the Notifier instance.
 Users can decide what information is output (and in what format), using a custom notifier.
 
-To customize it, define a custom notifier class inheriting from AbstractNotfier,
+To customize it, define a custom notifier class inheriting from AbstractNotifier,
 and define `notify()` which gets a message as str.
 Then, instantiate and pass it to the CollectPipe constructor.
 
