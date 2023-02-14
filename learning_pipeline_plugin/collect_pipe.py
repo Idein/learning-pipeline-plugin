@@ -22,9 +22,6 @@ class CollectPipeBase(Generic[D], Pipe[D, D]):
         batch_size: int,
         sspp_eps: float = 0.05,
         sspp_lambda: float = 1.0,
-        metadata: UserMetadata = {},
-        send_inqueuesize: int = 0,
-        endpoint_url: str = "api.autolearner.actcast.io",
         notifier: AbstractNotifier = Notifier(),
     ):
         """CollectPipeBase sends the selected image to the API Server.
@@ -36,9 +33,6 @@ class CollectPipeBase(Generic[D], Pipe[D, D]):
         - sspp_eps(float): trade-off parameter between accuracy and computational complexity.
                         The smaller the parameter, the higher the accuracy, but the increased computational complexity.
         - sspp_lambda(float): weighting parameter for diversity when uncertainty is 1.0
-        - metadata(UserMetadata): JSON-like data that will be stored with the image
-        - send_inqueuesize(int): size of the sending queue (default: 0 (no limit))
-        - endpoint_root(str): endpoint root of the lp API server
         - notifier(AbstractNotifier): message formatter to notify sending success/failure to Actcast
         """
         super().__init__()
