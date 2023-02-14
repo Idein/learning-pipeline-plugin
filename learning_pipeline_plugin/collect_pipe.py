@@ -16,6 +16,7 @@ class CollectPipeBase(Generic[D], Pipe[D, D]):
     def __init__(
         self,
         app: Application,
+        sender_task: SenderTask,
         uncertainty: AbstractUncertainty,
         collect_frequency: int,
         batch_size: int,
@@ -28,6 +29,7 @@ class CollectPipeBase(Generic[D], Pipe[D, D]):
     ):
         """CollectPipeBase sends the selected image to the API Server.
         - app(Application): instance of actfw_core.Application
+        - sender_task(SenderTask): instance of SenderTask
         - uncertainty(AbstractUncertainty): function to evaluate the uncertainty of an image
         - collect_frequency(int): frequency of sending data to the server. Unit is minutes.
         - batch_size(int): parameter for how many images to collect per send.
@@ -42,7 +44,6 @@ class CollectPipeBase(Generic[D], Pipe[D, D]):
         super().__init__()
         self.notifier = notifier
 
-        sender_task = SenderTask(endpoint_url, self.notifier, metadata, inqueuesize=send_inqueuesize)
         app.register_task(sender_task)
 
         self.select_task = SelectTask(
