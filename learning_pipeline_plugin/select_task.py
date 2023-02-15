@@ -7,7 +7,7 @@ from .algorithms.stream_al import MemoizationSieveStreamingPlusPlusSelector
 from .algorithms.submodular_diversity import SubmodularDiversity
 from .algorithms.type_helper import DataDict, DataSample
 from .algorithms.uncertainty import AbstractUncertainty
-from .sender_task import SenderTask
+from .sender_task import AbstractSenderTask
 
 
 def _initialize_selector(uncertainty: AbstractUncertainty,
@@ -45,7 +45,7 @@ class SelectTask(IsolatedTaskSingleBuffer[DataDict]):
                  uncertainty: AbstractUncertainty,
                  epsilon: float,
                  batch_size: int,
-                 sender: SenderTask,
+                 sender: AbstractSenderTask,
                  unc_div_lam: float = 10,
                  freq: int = 60):  # minute
         """SelectTask task determines the data to be collected and put the data to SenderTask.
@@ -53,7 +53,7 @@ class SelectTask(IsolatedTaskSingleBuffer[DataDict]):
         - epsilon(float): trade-off parameter between accuracy and computational complexity.
                         The smaller the parameter, the higher the accuracy, but the increased computational complexity.
         - batch_size(int): parameter for how many images to collect per send.
-        - sender(SenderTask): instance of SenderTask
+        - sender(AbstractSenderTask): instance of SenderTask
         - unc_div_lam(float): weighting parameter for diversity when uncertainty is 1.0
         - freq(int): frequency of determining whether or not to send data
 
