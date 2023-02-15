@@ -55,11 +55,12 @@ class SenderTask(AbstractSenderTask[DatedImage]):
         self.service_client = ServiceClient()
         self.endpoint_root = endpoint_root
         self.pipeline_id = pipeline_id
-        self.notifier: AbstractNotifier = NullNotifier()  # to be set through `set_notifier()` method called by CollectPipe
+        # notifier to be set through `set_notifier()` method called by CollectPipe
+        self.notifier: AbstractNotifier = NullNotifier()
         self.user_metadata = json.dumps(metadata)
         self.data_collect_token = None
         self._sending_enabled = True
-    
+
     def set_notifier(self, notifier: AbstractNotifier) -> None:
         """Set the notifier used by collect_pipe
         - notifier(AbstractNotifier): message formatter to notify sending success/failure to Actcast
