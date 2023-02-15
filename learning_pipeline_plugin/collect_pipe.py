@@ -26,7 +26,7 @@ class CollectPipeBase(Generic[D], Pipe[D, D]):
     ):
         """CollectPipeBase sends the selected image to the API Server.
         - app(Application): instance of actfw_core.Application
-        - sender_task(SenderTask): instance of SenderTask
+        - sender_task(AbstractSenderTask): instance of SenderTask
         - uncertainty(AbstractUncertainty): function to evaluate the uncertainty of an image
         - collect_frequency(int): frequency of sending data to the server. Unit is minutes.
         - batch_size(int): parameter for how many images to collect per send.
