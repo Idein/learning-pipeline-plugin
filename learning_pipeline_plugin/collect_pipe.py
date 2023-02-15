@@ -7,7 +7,7 @@ from .algorithms.type_helper import DataDict
 from .algorithms.uncertainty import AbstractUncertainty
 from .notifier import AbstractNotifier, Notifier
 from .select_task import SelectTask
-from .sender_task import SenderTask, UserMetadata
+from .sender_task import AbstractSenderTask
 
 D = TypeVar("D")
 
@@ -16,7 +16,7 @@ class CollectPipeBase(Generic[D], Pipe[D, D]):
     def __init__(
         self,
         app: Application,
-        sender_task: SenderTask,
+        sender_task: AbstractSenderTask,
         uncertainty: AbstractUncertainty,
         collect_frequency: int,
         batch_size: int,

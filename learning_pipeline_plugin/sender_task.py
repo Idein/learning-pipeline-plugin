@@ -3,7 +3,7 @@ import io
 import json
 import os
 import time
-from typing import Dict, Tuple, Union
+from typing import Dict, Generic, Tuple, TypeVar, Union
 
 import requests
 from actfw_core.service_client import ServiceClient
@@ -12,6 +12,7 @@ from PIL.Image import Image
 from .actfw_utils import IsolatedTask
 from .notifier import AbstractNotifier
 
+T = TypeVar("T")
 UserMetadata = Dict[str, Union[str, int, float, bool]]
 DatedImage = Tuple[str, Image]
 
@@ -20,7 +21,12 @@ class SendingError(Exception):
     pass
 
 
-class SenderTask(IsolatedTask[DatedImage]):
+class AbstractSenderTask(Generic[T], IsolatedTask[T]):
+    def _proc(self, data: T) -> None:
+        raise NotImplementedError
+
+
+class SenderTask(AbstractSenderTask[DatedImage]):
     def __init__(self,
                  endpoint_root: str,
                  notifier: AbstractNotifier,
