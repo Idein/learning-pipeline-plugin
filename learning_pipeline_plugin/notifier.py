@@ -16,6 +16,11 @@ class AbstractNotifier:
         raise NotImplementedError
 
 
+class NullNotifier(AbstractNotifier):
+    def notify(self, message: str) -> None:
+        pass
+
+
 class Notifier(AbstractNotifier):
     """
     Simple notifier object.

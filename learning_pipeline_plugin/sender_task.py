@@ -10,7 +10,7 @@ from actfw_core.service_client import ServiceClient
 from PIL.Image import Image
 
 from .actfw_utils import IsolatedTask
-from .notifier import AbstractNotifier
+from .notifier import AbstractNotifier, NullNotifier
 
 T = TypeVar("T")
 UserMetadata = Dict[str, Union[str, int, float, bool]]
@@ -22,23 +22,24 @@ class SendingError(Exception):
 
 
 class AbstractSenderTask(Generic[T], IsolatedTask[T]):
+    def set_notifier(self, notifier: AbstractNotifier) -> None:
+        raise NotImplementedError
+
     def _proc(self, data: T) -> None:
         raise NotImplementedError
 
 
 class SenderTask(AbstractSenderTask[DatedImage]):
     def __init__(self,
-                 endpoint_root: str,
                  pipeline_id: str,
-                 notifier: AbstractNotifier,
-                 metadata: UserMetadata,
+                 metadata: UserMetadata = {},
+                 endpoint_root: str = "api.autolearner.actcast.io",
                  inqueuesize: int = 0):
         """Isolated task used to send data to the Learning pipeline servers.
-        - endpoint_root(str): endpoint root of the lp API server
         - pipeline_id (str): ID of the pipeline to send data to (obtained after created a pipeline)
-        - notifier(AbstractNotifier): message formatter to notify sending success/failure to Actcast
         - metadata(UserMetadata): JSON-like data that will be stored with the image
                                     (e.g. user may include here some act settings)
+        - endpoint_root(str): endpoint root of the lp API server
         - inqueuesize(int): size of the sending queue (default: 0 (no limit))
 
         Use example:
@@ -54,7 +55,7 @@ class SenderTask(AbstractSenderTask[DatedImage]):
         self.service_client = ServiceClient()
         self.endpoint_root = endpoint_root
         self.pipeline_id = pipeline_id
-        self.notifier = notifier
+        self.notifier: AbstractNotifier = NullNotifier()  # to be set through `set_notifier()` method called by CollectPipe
         self.user_metadata = json.dumps(metadata)
         self.data_collect_token = None
         self._sending_enabled = True
@@ -64,6 +65,12 @@ class SenderTask(AbstractSenderTask[DatedImage]):
         if os.environ.get("ACTCAST_GROUP_ID") is None:
             self.notifier.notify("Group ID could not be retrieved, check device firmware")
             self._sending_enabled = False
+    
+    def set_notifier(self, notifier: AbstractNotifier) -> None:
+        """Set the notifier used by collect_pipe
+        - notifier(AbstractNotifier): message formatter to notify sending success/failure to Actcast
+        """
+        self.notifier = notifier
 
     @property
     def data_collect_url(self) -> str:
