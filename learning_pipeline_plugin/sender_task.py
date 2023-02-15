@@ -59,12 +59,6 @@ class SenderTask(AbstractSenderTask[DatedImage]):
         self.user_metadata = json.dumps(metadata)
         self.data_collect_token = None
         self._sending_enabled = True
-        if endpoint_root == "":
-            self.notifier.notify("endpoint URL is not set, data sending will fail")
-            self._sending_enabled = False
-        if os.environ.get("ACTCAST_GROUP_ID") is None:
-            self.notifier.notify("Group ID could not be retrieved, check device firmware")
-            self._sending_enabled = False
     
     def set_notifier(self, notifier: AbstractNotifier) -> None:
         """Set the notifier used by collect_pipe
@@ -79,6 +73,16 @@ class SenderTask(AbstractSenderTask[DatedImage]):
     @property
     def request_data_collect_token_url(self) -> str:
         return os.path.join(self.endpoint_root, "device", "token")
+
+    def is_sending_capable(self) -> bool:
+        if self._sending_enabled:
+            if self.endpoint_root == "":
+                self.notifier.notify("endpoint URL is not set, data sending will fail")
+                self._sending_enabled = False
+            if os.environ.get("ACTCAST_GROUP_ID") is None:
+                self.notifier.notify("Group ID could not be retrieved, check device firmware")
+                self._sending_enabled = False
+        return self._sending_enabled
 
     def _proc(self, data: DatedImage) -> None:
         timestamp, image = data
@@ -120,7 +124,7 @@ class SenderTask(AbstractSenderTask[DatedImage]):
         """Send to the server
         returns status code of request
         """
-        if not self._sending_enabled:
+        if not self.is_sending_capable():
             raise SendingError()
         if self.data_collect_token is None or self.data_collect_token_expires < time.time():
             self._request_data_collect_token()
