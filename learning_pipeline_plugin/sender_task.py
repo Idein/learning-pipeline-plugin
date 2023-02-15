@@ -23,11 +23,13 @@ class SendingError(Exception):
 class SenderTask(IsolatedTask[DatedImage]):
     def __init__(self,
                  endpoint_root: str,
+                 pipeline_id: str,
                  notifier: AbstractNotifier,
                  metadata: UserMetadata,
                  inqueuesize: int = 0):
         """Isolated task used to send data to the Learning pipeline servers.
         - endpoint_root(str): endpoint root of the lp API server
+        - pipeline_id (str): ID of the pipeline to send data to (obtained after created a pipeline)
         - notifier(AbstractNotifier): message formatter to notify sending success/failure to Actcast
         - metadata(UserMetadata): JSON-like data that will be stored with the image
                                     (e.g. user may include here some act settings)
@@ -45,6 +47,7 @@ class SenderTask(IsolatedTask[DatedImage]):
         super().__init__(inqueuesize)
         self.service_client = ServiceClient()
         self.endpoint_root = endpoint_root
+        self.pipeline_id = pipeline_id
         self.notifier = notifier
         self.user_metadata = json.dumps(metadata)
         self.data_collect_token = None
@@ -116,7 +119,8 @@ class SenderTask(IsolatedTask[DatedImage]):
                 "image": b64_image,
                 "device_id": os.environ.get("ACTCAST_DEVICE_ID"),
                 "act_id": os.environ.get("ACTCAST_ACT_ID"),
-                "act_settings": self.user_metadata,
+                "pipeline_id": self.pipeline_id,
+                "user_data": self.user_metadata
             },
             headers={
                 "Content-Type": "application/json",
@@ -135,9 +139,10 @@ class SenderTask(IsolatedTask[DatedImage]):
         headers = {
             "device_id": os.environ["ACTCAST_DEVICE_ID"],
             "group_id": os.environ["ACTCAST_GROUP_ID"],
+            "pipeline_id": self.pipeline_id
         }
 
-        signature = self.service_client.rs256(json.dumps(headers).encode("ascii"))
+        signature = self.service_client.rs256(json.dumps(headers, sort_keys=True).encode("ascii"))
 
         headers["Authorization"] = signature
         resp = requests.get(
