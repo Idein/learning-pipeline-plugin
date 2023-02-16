@@ -15,7 +15,7 @@ class AbstractUncertainty(Generic[T]):
 
 class PseudoUncertainty(AbstractUncertainty):
     def __call__(self, data: T) -> float:
-        return 0.
+        return 1.
 
 
 class ClassificationUncertainty(AbstractUncertainty[DataSample]):
