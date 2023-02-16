@@ -101,7 +101,9 @@ class MemoizationSieveStreamingPlusPlusSelector(Generic[T], AbstractStreamSelect
             self.submodular_f.clear_indices([self.current_index])
         self.current_index += 1
 
-    def _updateThresholdsData(self, tau_min: float):
+    def _updateThresholdsData(self, tau_min: float) -> None:
+        if tau_min <= 0:
+            return
         threshold = 1.0
         while threshold > tau_min/(1.0+self.eps):
             if threshold < self.delta and threshold not in self.s_t:

@@ -38,6 +38,7 @@ class CollectPipeBase(Generic[D], Pipe[D, D]):
         super().__init__()
         self.notifier = notifier
 
+        sender_task.set_notifier(notifier)
         app.register_task(sender_task)
 
         self.select_task = SelectTask(

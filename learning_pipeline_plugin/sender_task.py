@@ -10,7 +10,7 @@ from actfw_core.service_client import ServiceClient
 from PIL.Image import Image
 
 from .actfw_utils import IsolatedTask
-from .notifier import AbstractNotifier
+from .notifier import AbstractNotifier, NullNotifier
 
 T = TypeVar("T")
 UserMetadata = Dict[str, Union[str, int, float, bool]]
@@ -22,27 +22,31 @@ class SendingError(Exception):
 
 
 class AbstractSenderTask(Generic[T], IsolatedTask[T]):
+    def set_notifier(self, notifier: AbstractNotifier) -> None:
+        raise NotImplementedError
+
     def _proc(self, data: T) -> None:
         raise NotImplementedError
 
 
 class SenderTask(AbstractSenderTask[DatedImage]):
     def __init__(self,
-                 endpoint_root: str,
-                 notifier: AbstractNotifier,
-                 metadata: UserMetadata,
+                 pipeline_id: str,
+                 metadata: UserMetadata = {},
+                 endpoint_root: str = "https://api.autolearner.actcast.io",
                  inqueuesize: int = 0):
         """Isolated task used to send data to the Learning pipeline servers.
-        - endpoint_root(str): endpoint root of the lp API server
-        - notifier(AbstractNotifier): message formatter to notify sending success/failure to Actcast
+        - pipeline_id (str): ID of the pipeline to send data to (obtained after created a pipeline)
         - metadata(UserMetadata): JSON-like data that will be stored with the image
                                     (e.g. user may include here some act settings)
+        - endpoint_root(str): endpoint root of the lp API server (https://....)
         - inqueuesize(int): size of the sending queue (default: 0 (no limit))
 
         Use example:
         ```
-        st = SenderTask(endpoint, Notifier(), {"score_threshold": 0.3})
+        st = SenderTask(pipeline_id)
         app.register_task(st)
+        st.set_notifier(my_notifier)
 
         ...
         st.enqueue((time_stamp, image))
@@ -51,16 +55,18 @@ class SenderTask(AbstractSenderTask[DatedImage]):
         super().__init__(inqueuesize)
         self.service_client = ServiceClient()
         self.endpoint_root = endpoint_root
-        self.notifier = notifier
+        self.pipeline_id = pipeline_id
+        # notifier to be set through `set_notifier()` method called by CollectPipe
+        self.notifier: AbstractNotifier = NullNotifier()
         self.user_metadata = json.dumps(metadata)
         self.data_collect_token = None
         self._sending_enabled = True
-        if endpoint_root == "":
-            self.notifier.notify("endpoint URL is not set, data sending will fail")
-            self._sending_enabled = False
-        if os.environ.get("ACTCAST_GROUP_ID") is None:
-            self.notifier.notify("Group ID could not be retrieved, check device firmware")
-            self._sending_enabled = False
+
+    def set_notifier(self, notifier: AbstractNotifier) -> None:
+        """Set the notifier used by collect_pipe
+        - notifier(AbstractNotifier): message formatter to notify sending success/failure to Actcast
+        """
+        self.notifier = notifier
 
     @property
     def data_collect_url(self) -> str:
@@ -69,6 +75,16 @@ class SenderTask(AbstractSenderTask[DatedImage]):
     @property
     def request_data_collect_token_url(self) -> str:
         return os.path.join(self.endpoint_root, "device", "token")
+
+    def is_sending_capable(self) -> bool:
+        if self._sending_enabled:
+            if self.endpoint_root == "":
+                self.notifier.notify("endpoint URL is not set, data sending will fail")
+                self._sending_enabled = False
+            if os.environ.get("ACTCAST_GROUP_ID") is None:
+                self.notifier.notify("Group ID could not be retrieved, check device firmware")
+                self._sending_enabled = False
+        return self._sending_enabled
 
     def _proc(self, data: DatedImage) -> None:
         timestamp, image = data
@@ -110,7 +126,7 @@ class SenderTask(AbstractSenderTask[DatedImage]):
         """Send to the server
         returns status code of request
         """
-        if not self._sending_enabled:
+        if not self.is_sending_capable():
             raise SendingError()
         if self.data_collect_token is None or self.data_collect_token_expires < time.time():
             self._request_data_collect_token()
@@ -122,7 +138,8 @@ class SenderTask(AbstractSenderTask[DatedImage]):
                 "image": b64_image,
                 "device_id": os.environ.get("ACTCAST_DEVICE_ID"),
                 "act_id": os.environ.get("ACTCAST_ACT_ID"),
-                "act_settings": self.user_metadata,
+                "pipeline_id": self.pipeline_id,
+                "user_data": self.user_metadata
             },
             headers={
                 "Content-Type": "application/json",
@@ -141,9 +158,10 @@ class SenderTask(AbstractSenderTask[DatedImage]):
         headers = {
             "device_id": os.environ["ACTCAST_DEVICE_ID"],
             "group_id": os.environ["ACTCAST_GROUP_ID"],
+            "pipeline_id": self.pipeline_id
         }
 
-        signature = self.service_client.rs256(json.dumps(headers).encode("ascii"))
+        signature = self.service_client.rs256(json.dumps(headers, sort_keys=True).encode("ascii"))
 
         headers["Authorization"] = signature
         resp = requests.get(

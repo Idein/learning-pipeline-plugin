@@ -9,9 +9,11 @@ To collect data, create a pipe that inherits from `learning_pipeline_plugin.coll
 and define `interpret_inputs()`.
 
 Example:
+
 ```python
 from typing import Optional
 from learning_pipeline_plugin.collect_pipe import CollectPipeBase, DataDict
+from learning_pipeline_plugin import sender_task
 
 class CollectPipe(CollectPipeBase):
     def interpret_inputs(self, inputs) -> Optional[DataDict]:
@@ -33,7 +35,16 @@ class CollectPipe(CollectPipeBase):
 - `feature_vector`: vector with shape (N,)
 - `other_data`: any data used for calculating uncertainty
 
-Then, instantiate this and connect to other pipes:
+Then, create a `SenderTask` instance and pass it the pipeline_id parameter corresponding to your pipeline.
+
+```python
+def main():
+    [...]
+
+    sender = sender_task.SenderTask(pipeline_id)
+```
+
+Finally, instantiate your `CollectPipe` and connect to other pipes:
 
 ```python
 def main():
@@ -81,4 +92,3 @@ def main():
         notifier=CustomNotifier()
     )
 ```
-
