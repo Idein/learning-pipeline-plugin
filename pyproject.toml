@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "learning-pipeline-plugin"
-version = "0.2.1"
+version = "0.3.0"
 description = ""
 authors = ["Idein Inc."]
 license = "MIT"
