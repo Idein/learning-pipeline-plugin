@@ -33,13 +33,13 @@ class SenderTask(AbstractSenderTask[DatedImage]):
     def __init__(self,
                  pipeline_id: str,
                  metadata: UserMetadata = {},
-                 endpoint_root: str = "api.autolearner.actcast.io",
+                 endpoint_root: str = "https://api.autolearner.actcast.io",
                  inqueuesize: int = 0):
         """Isolated task used to send data to the Learning pipeline servers.
         - pipeline_id (str): ID of the pipeline to send data to (obtained after created a pipeline)
         - metadata(UserMetadata): JSON-like data that will be stored with the image
                                     (e.g. user may include here some act settings)
-        - endpoint_root(str): endpoint root of the lp API server
+        - endpoint_root(str): endpoint root of the lp API server (https://....)
         - inqueuesize(int): size of the sending queue (default: 0 (no limit))
 
         Use example:
