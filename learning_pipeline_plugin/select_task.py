@@ -46,7 +46,7 @@ class SelectTask(IsolatedTaskSingleBuffer[DataDict]):
                  epsilon: float,
                  batch_size: int,
                  sender: AbstractSenderTask,
-                 unc_div_lam: float = 10,
+                 unc_div_lam: float = 0.91,
                  freq: int = 60):  # minute
         """SelectTask task determines the data to be collected and put the data to SenderTask.
         - uncertainty(AbstractUncertainty): function to evaluate the uncertainty of an image
@@ -54,7 +54,8 @@ class SelectTask(IsolatedTaskSingleBuffer[DataDict]):
                         The smaller the parameter, the higher the accuracy, but the increased computational complexity.
         - batch_size(int): parameter for how many images to collect per send.
         - sender(AbstractSenderTask): instance of SenderTask
-        - unc_div_lam(float): weighting parameter for diversity when uncertainty is 1.0
+        - unc_div_lam(float): weighting parameter to balance uncertainty/diversity
+                        (diversity only if 0, uncertainty only if 1)
         - freq(int): frequency of determining whether or not to send data
 
         Use example:

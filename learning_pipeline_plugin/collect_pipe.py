@@ -21,7 +21,7 @@ class CollectPipeBase(Generic[D], Pipe[D, D]):
         collect_frequency: int,
         batch_size: int,
         sspp_eps: float = 0.05,
-        sspp_lambda: float = 1.0,
+        uncertainty_rate_lambda: float = 0.91,
         notifier: AbstractNotifier = Notifier(),
     ):
         """CollectPipeBase sends the selected image to the API Server.
@@ -32,7 +32,8 @@ class CollectPipeBase(Generic[D], Pipe[D, D]):
         - batch_size(int): parameter for how many images to collect per send.
         - sspp_eps(float): trade-off parameter between accuracy and computational complexity.
                         The smaller the parameter, the higher the accuracy, but the increased computational complexity.
-        - sspp_lambda(float): weighting parameter for diversity when uncertainty is 1.0
+        - uncertainty_rate_lambda(float): weighting parameter to balance uncertainty/diversity
+                        (diversity only if 0, uncertainty only if 1)
         - notifier(AbstractNotifier): message formatter to notify sending success/failure to Actcast
         """
         super().__init__()
@@ -46,7 +47,7 @@ class CollectPipeBase(Generic[D], Pipe[D, D]):
             sspp_eps,
             batch_size,
             sender_task,
-            sspp_lambda,
+            uncertainty_rate_lambda,
             collect_frequency
         )
         app.register_task(self.select_task)
