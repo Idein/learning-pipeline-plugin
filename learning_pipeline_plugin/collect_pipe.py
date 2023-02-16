@@ -32,7 +32,8 @@ class CollectPipeBase(Generic[D], Pipe[D, D]):
         - batch_size(int): parameter for how many images to collect per send.
         - sspp_eps(float): trade-off parameter between accuracy and computational complexity.
                         The smaller the parameter, the higher the accuracy, but the increased computational complexity.
-        - uncertainty_rate_lambda(float): weighting parameter to balance uncertainty/diversity (diversity only if 0, uncertainty only if 1)
+        - uncertainty_rate_lambda(float): weighting parameter to balance uncertainty/diversity
+                        (diversity only if 0, uncertainty only if 1)
         - notifier(AbstractNotifier): message formatter to notify sending success/failure to Actcast
         """
         super().__init__()
