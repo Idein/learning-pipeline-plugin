@@ -44,8 +44,9 @@ class SenderTask(AbstractSenderTask[DatedImage]):
 
         Use example:
         ```
-        st = SenderTask(endpoint, Notifier(), {"score_threshold": 0.3})
+        st = SenderTask(pipeline_id)
         app.register_task(st)
+        st.set_notifier(my_notifier)
 
         ...
         st.enqueue((time_stamp, image))
