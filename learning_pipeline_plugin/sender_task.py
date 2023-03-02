@@ -176,5 +176,6 @@ class SenderTask(AbstractSenderTask[DatedImage]):
             self.data_collect_token = data_collect_token
             self.data_collect_token_expires = time.time() + expires_in
         else:
-            self.notifier.notify(f"Data Collect Token request failure ({resp.status_code})")
+            self.notifier.notify(f"Data Collect Token request failed with status {resp.status_code}"
+                                 f" (reason: {resp.text})")
             resp.raise_for_status()
