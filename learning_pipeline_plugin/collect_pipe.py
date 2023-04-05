@@ -22,7 +22,7 @@ class CollectPipeBase(Generic[D], Pipe[D, D]):
         batch_size: int,
         sspp_eps: float = 0.05,
         uncertainty_rate_lambda: float = 0.91,
-        notifier: AbstractNotifier = Notifier(),
+        notifier: Optional[AbstractNotifier] = None
     ):
         """CollectPipeBase sends the selected image to the API Server.
         - app(Application): instance of actfw_core.Application
@@ -37,9 +37,12 @@ class CollectPipeBase(Generic[D], Pipe[D, D]):
         - notifier(AbstractNotifier): message formatter to notify sending success/failure to Actcast
         """
         super().__init__()
-        self.notifier = notifier
+        if notifier is None:
+            self.notifier: AbstractNotifier = Notifier()
+        else:
+            self.notifier = notifier
 
-        sender_task.set_notifier(notifier)
+        sender_task.set_notifier(self.notifier)
         app.register_task(sender_task)
 
         self.select_task = SelectTask(

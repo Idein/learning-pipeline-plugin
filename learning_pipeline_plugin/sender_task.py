@@ -1,9 +1,9 @@
-import base64
 import io
 import json
 import os
+import random
 import time
-from typing import Dict, Generic, Tuple, TypeVar, Union
+from typing import Dict, Generic, Optional, Tuple, TypeVar, Union
 
 import requests
 from actfw_core.service_client import ServiceClient
@@ -17,10 +17,6 @@ UserMetadata = Dict[str, Union[str, int, float, bool]]
 DatedImage = Tuple[str, Image]
 
 
-class SendingError(Exception):
-    pass
-
-
 class AbstractSenderTask(Generic[T], IsolatedTask[T]):
     def set_notifier(self, notifier: AbstractNotifier) -> None:
         raise NotImplementedError
@@ -32,15 +28,20 @@ class AbstractSenderTask(Generic[T], IsolatedTask[T]):
 class SenderTask(AbstractSenderTask[DatedImage]):
     def __init__(self,
                  pipeline_id: str,
-                 metadata: UserMetadata = {},
+                 metadata: Optional[UserMetadata] = None,
                  endpoint_root: str = "https://api.autolearner.actcast.io",
+                 max_retries: int = 3,
+                 backoff_time_base: float = 60.0,
                  inqueuesize: int = 0):
         """Isolated task used to send data to the Learning pipeline servers.
         - pipeline_id (str): ID of the pipeline to send data to (obtained after created a pipeline)
-        - metadata(UserMetadata): JSON-like data that will be stored with the image
+        - metadata (UserMetadata): JSON-like data that will be stored with the image
                                     (e.g. user may include here some act settings)
-        - endpoint_root(str): endpoint root of the lp API server (https://....)
-        - inqueuesize(int): size of the sending queue (default: 0 (no limit))
+        - endpoint_root (str): endpoint root of the lp API server (https://....)
+        - max_retries (int): Max number of retry attempts.
+        - backoff_time_base (float): The delay time between retry attempts
+          is defined by random(backoff_time_base * (2 ** i)) seconds.
+        - inqueuesize (int): size of the sending queue (default: 0 (no limit))
 
         Use example:
         ```
@@ -56,125 +57,150 @@ class SenderTask(AbstractSenderTask[DatedImage]):
         self.service_client = ServiceClient()
         self.endpoint_root = endpoint_root
         self.pipeline_id = pipeline_id
-        # notifier to be set through `set_notifier()` method called by CollectPipe
         self.notifier: AbstractNotifier = NullNotifier()
-        self.user_metadata = json.dumps(metadata)
-        self.data_collect_token = None
-        self._sending_enabled = True
+        self.user_metadata = {} if metadata is None else metadata
+        self.device_token = None
+        self.device_token_endpoint = os.path.join(endpoint_root, "device", "token")
+        self.collect_requests_endpoint = os.path.join(endpoint_root, "collect", "requests")
+        assert max_retries > 0
+        self.max_retries = max_retries
+        assert backoff_time_base > 0
+        self.backoff_time_base = backoff_time_base
 
     def set_notifier(self, notifier: AbstractNotifier) -> None:
-        """Set the notifier used by collect_pipe
-        - notifier(AbstractNotifier): message formatter to notify sending success/failure to Actcast
-        """
         self.notifier = notifier
 
-    @property
-    def data_collect_url(self) -> str:
-        return os.path.join(self.endpoint_root, "data_collect")
+    def backoff(self, attempt: int) -> None:
+        assert attempt >= 0
+        max_period = self.backoff_time_base * (2 ** attempt)
+        t = random.random() * max_period
+        time.sleep(t)
 
-    @property
-    def request_data_collect_token_url(self) -> str:
-        return os.path.join(self.endpoint_root, "device", "token")
+    def proxies_common(self) -> dict:
+        return {"https": f'socks5h://{os.environ["ACTCAST_SOCKS_SERVER"]}'}
 
-    def is_sending_capable(self) -> bool:
-        if self._sending_enabled:
-            if self.endpoint_root == "":
-                self.notifier.notify("endpoint URL is not set, data sending will fail")
-                self._sending_enabled = False
-            if os.environ.get("ACTCAST_GROUP_ID") is None:
-                self.notifier.notify("Group ID could not be retrieved, check device firmware")
-                self._sending_enabled = False
-        return self._sending_enabled
-
-    def _proc(self, data: DatedImage) -> None:
-        timestamp, image = data
-        pngimage = io.BytesIO()
-        image.save(pngimage, format="PNG")
-        b64_image = base64.b64encode(pngimage.getbuffer()).decode("utf-8")
-
-        success = self._retry_call_api(timestamp, b64_image, max_retry=3)
-        self.notifier.notify("Tried to send data sample: {}".format(
-            "Success" if success else "Failure"))
-
-    def _retry_call_api(self,
-                        timestamp: str,
-                        b64_image: str,
-                        max_retry: int,
-                        retry_count: int = 0) -> bool:
-        """recursive method to try multiple times to send data
-        returns sending success status
-        """
-        if retry_count == max_retry:
+    def has_valid_params(self) -> bool:
+        if self.endpoint_root == "":
+            self.notifier.notify("The specified endpoint URL is blank.")
             return False
 
-        try:
-            status_code, text = self._call_api(timestamp, b64_image)
-            if status_code == 200:
-                return True
-            elif status_code == 401:
-                self._request_data_collect_token()
-        except SendingError:
-            self.notifier.notify("Data Collect Token request failure")
+        if os.environ.get("ACTCAST_GROUP_ID") is None:
+            self.notifier.notify("Failed to identify Group ID.")
             return False
-        except (requests.exceptions.RequestException, requests.exceptions.HTTPError):
-            return self._retry_call_api(timestamp, b64_image, max_retry, retry_count+1)
-        else:
-            self.notifier.notify(f"Data collect failed with status {status_code} (reason: {text})")
-            return self._retry_call_api(timestamp, b64_image, max_retry, retry_count+1)
 
-    def _call_api(self, timestamp: str, b64_image: str) -> Tuple[int, str]:
-        """Send to the server
-        returns status code of request
-        """
-        if not self.is_sending_capable():
-            raise SendingError()
-        if self.data_collect_token is None or self.data_collect_token_expires < time.time():
-            self._request_data_collect_token()
+        return True
 
-        resp = requests.post(
-            self.data_collect_url,
-            json={
-                "timestamp": timestamp,
-                "image": b64_image,
-                "act_id": os.environ.get("ACTCAST_ACT_ID"),
-                "pipeline_id": self.pipeline_id,
-                "user_data": self.user_metadata
-            },
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": "Bearer {}".format(self.data_collect_token),
-            },
-            proxies={"https": f'socks5h://{os.environ["ACTCAST_SOCKS_SERVER"]}'},
-        )
-        return resp.status_code, resp.text
+    def has_valid_token(self) -> bool:
+        return self.device_token is not None and self.device_token_expires < time.time()
 
-    def _request_data_collect_token(self) -> None:
-        """Fetch authorization token from server, which is required for data sending
-        """
-        if not self._sending_enabled:
-            return
-        data_collect_token = None
-        headers = {
+    def update_token(self) -> None:
+        def generate_headers(sending_context: dict) -> dict:
+            def generate_signature(object: dict) -> str:
+                return self.service_client.rs256(json.dumps(object, sort_keys=True).encode("ascii"))
+
+            signature = generate_signature(sending_context)
+            headers: Dict[str, str] = {}
+            headers.update(**sending_context, **{"Authorization": signature})
+
+            return headers
+
+        sending_context = {
             "device_id": os.environ["ACTCAST_DEVICE_ID"],
             "group_id": os.environ["ACTCAST_GROUP_ID"],
             "pipeline_id": self.pipeline_id
         }
 
-        signature = self.service_client.rs256(json.dumps(headers, sort_keys=True).encode("ascii"))
-
-        headers["Authorization"] = signature
-        resp = requests.get(
-            self.request_data_collect_token_url,
-            headers=headers,
-            proxies={"https": f'socks5h://{os.environ["ACTCAST_SOCKS_SERVER"]}'},
+        response = requests.get(
+            self.device_token_endpoint,
+            headers=generate_headers(sending_context),
+            proxies=self.proxies_common()
         )
-        if resp.status_code == 200:
-            payload = resp.json()
-            data_collect_token = payload["data_collect_token"]
-            expires_in = payload["expires_in"]
-            self.data_collect_token = data_collect_token
-            self.data_collect_token_expires = time.time() + expires_in
+
+        if response.status_code == 200:
+            try:
+                payload = response.json()
+                device_token = payload["data_collect_token"]
+                expires_in = payload["expires_in"]
+            except (requests.exceptions.JSONDecodeError, KeyError, TypeError):
+                self.device_token = None
+                self.notifier.notify(f"Invalid API response. (endpoint: {self.device_token_endpoint})")
+                return
+
+            self.device_token = device_token
+            self.device_token_expires = time.time() + expires_in
         else:
-            self.notifier.notify(f"Data Collect Token request failed with status {resp.status_code}"
-                                 f" (reason: {resp.text})")
-            resp.raise_for_status()
+            self.device_token = None
+            failure_status = {"status_code": response.status_code, "text": response.text}
+            self.notifier.notify(f"Failed to update Device Token. {failure_status}")
+
+    def send_image(self, data: DatedImage) -> bool:
+        def get_upload_url(timestamp: str) -> Optional[str]:
+            response = requests.post(
+                self.collect_requests_endpoint,
+                json={
+                    "timestamp": timestamp,
+                    "act_id": os.environ.get("ACTCAST_ACT_ID"),
+                    "pipeline_id": self.pipeline_id,
+                    "user_data": json.dumps(self.user_metadata)
+                },
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer {}".format(self.device_token),
+                },
+                proxies=self.proxies_common()
+            )
+            if response.status_code == 200:
+                try:
+                    payload = response.json()
+                    upload_url = payload["url"]
+                    return upload_url
+                except (requests.exceptions.JSONDecodeError, KeyError, TypeError):
+                    self.notifier.notify(f"Invalid API response. (endpoint: {self.collect_requests_endpoint})")
+                    return None
+            else:
+                failure_status = {"status_code": response.status_code, "text": response.text}
+                self.notifier.notify(f"Failed to get an upload url. {failure_status}")
+                return None
+
+        def upload_image(upload_url: str, image: Image) -> bool:
+            image_bytes = io.BytesIO()
+            image.save(image_bytes, format="PNG")
+
+            response = requests.put(upload_url, data=image_bytes, proxies=self.proxies_common())
+
+            if response.status_code == 200:
+                return True
+            else:
+                failure_status = {"status_code": response.status_code, "text": response.text}
+                self.notifier.notify(f"Failed to upload an image to {upload_url} . {failure_status}")
+                return False
+
+        timestamp, image = data
+        upload_url = get_upload_url(timestamp)
+
+        if upload_url is None:
+            return False
+
+        return upload_image(upload_url, image)
+
+    def _proc(self, data: DatedImage) -> None:
+        if not self.has_valid_params():
+            return
+
+        for i in range(self.max_retries):
+            if not self.has_valid_token():
+                self.update_token()
+
+                if not self.has_valid_token():
+                    self.backoff(i)
+                    continue
+
+            success = self.send_image(data)
+
+            if success:
+                break
+
+            self.backoff(i)
+
+        result = "Success" if success else "Failure"
+        self.notifier.notify(f"SenderTask Result: {result}")
