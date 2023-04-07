@@ -166,7 +166,7 @@ class SenderTask(AbstractSenderTask[DatedImage]):
             image_bytes = io.BytesIO()
             image.save(image_bytes, format="PNG")
 
-            response = requests.put(upload_url, data=image_bytes, proxies=self.proxies_common())
+            response = requests.put(upload_url, data=image_bytes.getvalue(), proxies=self.proxies_common())
 
             if response.status_code == 200:
                 return True
