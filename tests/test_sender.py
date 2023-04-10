@@ -1,12 +1,13 @@
-from typing import Tuple
-import pytest
-from pytest import MonkeyPatch
 import json
 import time
-from PIL import Image
+from typing import Tuple
 
-from actfw_core import service_client
+import learning_pipeline_plugin
+import pytest
 import responses
+from actfw_core.service_client import ServiceClient
+from PIL import Image
+from pytest import MonkeyPatch
 from requests import PreparedRequest
 
 ENDPOINT = "https://api.mock.autolearner.actcast.io"
@@ -37,14 +38,14 @@ def collect_requests_callback(request: PreparedRequest) -> Tuple[int, dict, str]
 
 
 def prepare(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("ACTCAST_SERVICE_SOCK", "")
     monkeypatch.setenv("ACTCAST_SOCKS_SERVER", "")
     monkeypatch.setenv("ACTCAST_DEVICE_ID", "qwe-123-rty")
     monkeypatch.setenv("ACTCAST_GROUP_ID", "123456")
 
-    class PseudoServiceClient:
-        def rs256(self, payload: bytes) -> str:
-            return "pseudo_sign"
-    service_client.ServiceClient = PseudoServiceClient
+    def pseudo_rs256(self, payload: bytes) -> str:
+        return "pseudo_sign"
+    ServiceClient.rs256 = pseudo_rs256
 
     # mock device token API
     responses.add_callback(
@@ -69,7 +70,6 @@ def prepare(monkeypatch: MonkeyPatch) -> None:
 @responses.activate
 def test_sender_update_token(monkeypatch: MonkeyPatch):
     prepare(monkeypatch)
-    import learning_pipeline_plugin
     sender = learning_pipeline_plugin.sender_task.SenderTask(
         "123",
         endpoint_root=ENDPOINT
@@ -91,7 +91,6 @@ def test_sender_update_token(monkeypatch: MonkeyPatch):
 @responses.activate
 def test_sender_send_image(monkeypatch: MonkeyPatch):
     prepare(monkeypatch)
-    import learning_pipeline_plugin
     sender = learning_pipeline_plugin.sender_task.SenderTask(
         "123",
         endpoint_root=ENDPOINT
@@ -112,7 +111,6 @@ def test_sender_send_image(monkeypatch: MonkeyPatch):
 @responses.activate
 def test_sender_e2e(monkeypatch: MonkeyPatch):
     prepare(monkeypatch)
-    import learning_pipeline_plugin
     sender = learning_pipeline_plugin.sender_task.SenderTask(
         "123",
         endpoint_root=ENDPOINT
