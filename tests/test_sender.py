@@ -5,7 +5,7 @@ import json
 import time
 from PIL import Image
 
-from actfw_core.service_client import ServiceClient
+from actfw_core import service_client
 import responses
 from requests import PreparedRequest
 
@@ -44,7 +44,7 @@ def prepare(monkeypatch: MonkeyPatch) -> None:
     class PseudoServiceClient:
         def rs256(self, payload: bytes) -> str:
             return "pseudo_sign"
-    monkeypatch.setattr("actfw_core.service_client.ServiceClient", PseudoServiceClient)
+    service_client.ServiceClient = PseudoServiceClient
 
     # mock device token API
     responses.add_callback(
