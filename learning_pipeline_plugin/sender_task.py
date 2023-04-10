@@ -91,7 +91,7 @@ class SenderTask(AbstractSenderTask[DatedImage]):
         return True
 
     def has_valid_token(self) -> bool:
-        return self.device_token is not None and self.device_token_expires < time.time()
+        return self.device_token is not None and self.device_token_expires > time.time()
 
     def update_token(self) -> None:
         def generate_headers(sending_context: dict) -> dict:
