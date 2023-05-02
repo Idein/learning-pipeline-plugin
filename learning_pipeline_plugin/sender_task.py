@@ -140,7 +140,6 @@ class SenderTask(AbstractSenderTask[DatedImage]):
                 json={
                     "timestamp": timestamp,
                     "act_id": os.environ.get("ACTCAST_ACT_ID"),
-                    "pipeline_id": self.pipeline_id,
                     "user_data": json.dumps(self.user_metadata)
                 },
                 headers={
