@@ -14,8 +14,6 @@ ENDPOINT = "https://api.mock.autolearner.actcast.io"
 PUT_URL = "https://pseudo.url/test"
 
 
-
-
 def device_token_callback(request: PreparedRequest) -> Tuple[int, dict, str]:
     request_headers = request.headers
     assert {"device_id", "group_id", "pipeline_id", "Authorization"}.issubset(request_headers.keys())
@@ -24,6 +22,12 @@ def device_token_callback(request: PreparedRequest) -> Tuple[int, dict, str]:
         "expires_in": 3
     }
     return (200, {}, json.dumps(resp_body))
+
+
+def device_token_failure_callback(request: PreparedRequest) -> Tuple[int, dict, str]:
+    resp_body = "FAILED TO GET TOKEN"
+    return (400, {}, json.dumps(resp_body))
+
 
 def collect_requests_callback(request: PreparedRequest) -> Tuple[int, dict, str]:
     request_headers = request.headers
@@ -37,7 +41,14 @@ def collect_requests_callback(request: PreparedRequest) -> Tuple[int, dict, str]
     return (200, {}, json.dumps(resp_body))
 
 
-def prepare(monkeypatch: MonkeyPatch) -> None:
+def collect_requests_failure_callback(request: PreparedRequest) -> Tuple[int, dict, str]:
+    resp_body = "Failed to create url"
+    return (400, {}, json.dumps(resp_body))
+
+
+def prepare(monkeypatch: MonkeyPatch,
+            fail_device_token: bool = False,
+            fail_collect_request: bool = False) -> None:
     monkeypatch.setenv("ACTCAST_SERVICE_SOCK", "")
     monkeypatch.setenv("ACTCAST_SOCKS_SERVER", "")
     monkeypatch.setenv("ACTCAST_DEVICE_ID", "qwe-123-rty")
@@ -51,7 +62,7 @@ def prepare(monkeypatch: MonkeyPatch) -> None:
     responses.add_callback(
         responses.GET,
         f"{ENDPOINT}/device/token",
-        callback=device_token_callback,
+        callback=device_token_failure_callback if fail_device_token else device_token_callback,
         content_type="application/json",
     )
 
@@ -59,7 +70,7 @@ def prepare(monkeypatch: MonkeyPatch) -> None:
     responses.add_callback(
         responses.POST,
         f"{ENDPOINT}/collect/requests",
-        callback=collect_requests_callback,
+        callback=collect_requests_failure_callback if fail_collect_request else collect_requests_callback,
         content_type="application/json",
     )
     responses.put(
@@ -160,3 +171,110 @@ def test_sender_e2e(monkeypatch: MonkeyPatch):
     responses.assert_call_count(f"{ENDPOINT}/device/token", 2)
     responses.assert_call_count(f"{ENDPOINT}/collect/requests", 3)
     responses.assert_call_count(PUT_URL, 3)
+
+
+@responses.activate
+def test_sender_failed_token(monkeypatch: MonkeyPatch):
+    prepare(monkeypatch, fail_device_token=True)
+    sender = learning_pipeline_plugin.sender_task.SenderTask(
+        "123",
+        endpoint_root=ENDPOINT,
+        backoff_time_base=0.1,
+    )
+
+    # before call
+    responses.assert_call_count(f"{ENDPOINT}/device/token", 0)
+    responses.assert_call_count(f"{ENDPOINT}/collect/requests", 0)
+    responses.assert_call_count(PUT_URL, 0)
+
+    dated_image = ("", Image.new(mode="RGB", size=(200, 200)))
+    sender.start()
+    sender.enqueue(dated_image)
+    time.sleep(1)
+    sender.enqueue(dated_image)
+    time.sleep(0.5)
+    sender.stop()
+    sender.join(10)
+
+    sender
+
+    """
+    flow is as follow:
+
+    ```text
+    [first enqueue]
+    get token -> failed 
+    retry get token -> failed 
+    retry get token -> failed 
+    abort
+
+    [second enqueue]
+    get token -> failed 
+    retry get token -> failed 
+    retry get token -> failed 
+    abort
+    ```
+
+    so we expect:
+    - get token: 6 calls
+    - get collect url: 0 calls
+    - put image: 0 calls
+    """
+
+    responses.assert_call_count(f"{ENDPOINT}/device/token", 6)
+    responses.assert_call_count(f"{ENDPOINT}/collect/requests", 0)
+    responses.assert_call_count(PUT_URL, 0)
+
+
+@responses.activate
+def test_sender_failed_request(monkeypatch: MonkeyPatch):
+    prepare(monkeypatch, fail_collect_request=True)
+    sender = learning_pipeline_plugin.sender_task.SenderTask(
+        "123",
+        endpoint_root=ENDPOINT,
+        backoff_time_base=0.1,
+    )
+
+    # before call
+    responses.assert_call_count(f"{ENDPOINT}/device/token", 0)
+    responses.assert_call_count(f"{ENDPOINT}/collect/requests", 0)
+    responses.assert_call_count(PUT_URL, 0)
+
+    dated_image = ("", Image.new(mode="RGB", size=(200, 200)))
+    sender.start()
+    sender.enqueue(dated_image)
+    sender.enqueue(dated_image)
+    time.sleep(0.5)
+    sender.stop()
+    sender.join(10)
+
+    sender
+
+    """
+    flow is as follow:
+
+    ```text
+    [first enqueue]
+    get token
+    get collect url -> failed
+    retry get collect_url -> failed 
+    retry get collect_url -> failed 
+    abort
+
+    [second enqueue]
+    (token still valid)
+    get collect url -> failed
+    retry get collect_url -> failed 
+    retry get collect_url -> failed 
+    abort
+    ```
+
+    so we expect:
+    - get token: 1 calls
+    - get collect url: 6 calls
+    - put image: 0 calls
+    """
+
+    responses.assert_call_count(f"{ENDPOINT}/device/token", 1)
+    responses.assert_call_count(f"{ENDPOINT}/collect/requests", 6)
+    responses.assert_call_count(PUT_URL, 0)
