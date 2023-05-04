@@ -3,11 +3,12 @@ import json
 import os
 import random
 import time
-from typing import Dict, Generic, Optional, Tuple, TypeVar, Union
+from typing import Dict, Generic, Optional, Tuple, Type, TypeVar, Union
 
 import requests
 from actfw_core.service_client import ServiceClient
 from PIL.Image import Image
+from typing_extensions import Protocol
 
 from .actfw_utils import IsolatedTask
 from .notifier import AbstractNotifier, NullNotifier
@@ -17,15 +18,26 @@ UserMetadata = Dict[str, Union[str, int, float, bool]]
 DatedImage = Tuple[str, Image]
 
 
+class ServiceClientProtocol(Protocol):
+    def rs256(self, payload: bytes) -> str:
+        raise NotImplementedError 
+
+
 class AbstractSenderTask(Generic[T], IsolatedTask[T]):
     def set_notifier(self, notifier: AbstractNotifier) -> None:
         raise NotImplementedError
 
     def _proc(self, data: T) -> None:
+        _ = self._sender_call(data)
+
+    def _sender_call(self, data: T) -> bool:
+        # should returl the boolean equal to the success of the operation
+        # can be used by subclass to perform operations on success or failure
         raise NotImplementedError
 
 
-class SenderTask(AbstractSenderTask[DatedImage]):
+class SenderTaskGenericDated(Generic[T], AbstractSenderTask[T]):
+    ServiceClient: Type[ServiceClientProtocol] = ServiceClient
     def __init__(self,
                  pipeline_id: str,
                  metadata: Optional[UserMetadata] = None,
@@ -54,7 +66,7 @@ class SenderTask(AbstractSenderTask[DatedImage]):
         ```
         """
         super().__init__(inqueuesize)
-        self.service_client = ServiceClient()
+        self.service_client = self.ServiceClient()
         self.endpoint_root = endpoint_root
         self.pipeline_id = pipeline_id
         self.notifier: AbstractNotifier = NullNotifier()
@@ -69,6 +81,14 @@ class SenderTask(AbstractSenderTask[DatedImage]):
 
     def set_notifier(self, notifier: AbstractNotifier) -> None:
         self.notifier = notifier
+
+    @staticmethod
+    def timestamp_from_data(data: T) -> str:
+        raise NotImplementedError
+
+    @staticmethod
+    def bytes_from_data(data: T) -> bytes:
+        raise NotImplementedError
 
     def backoff(self, attempt: int) -> None:
         assert attempt >= 0
@@ -133,8 +153,9 @@ class SenderTask(AbstractSenderTask[DatedImage]):
             failure_status = {"status_code": response.status_code, "text": response.text}
             self.notifier.notify(f"Failed to update Device Token. {failure_status}")
 
-    def send_image(self, data: DatedImage) -> bool:
-        def get_upload_url(timestamp: str) -> Optional[str]:
+    def send_image(self, data: T) -> bool:
+        def get_upload_url(data: T) -> Optional[str]:
+            timestamp = self.timestamp_from_data(data)
             response = requests.post(
                 self.collect_requests_endpoint,
                 json={
@@ -161,11 +182,10 @@ class SenderTask(AbstractSenderTask[DatedImage]):
                 self.notifier.notify(f"Failed to get an upload url. {failure_status}")
                 return None
 
-        def upload_image(upload_url: str, image: Image) -> bool:
-            image_bytes = io.BytesIO()
-            image.save(image_bytes, format="PNG")
+        def upload_image(upload_url: str, data: T) -> bool:
+            image_bytes = self.bytes_from_data(data)
 
-            response = requests.put(upload_url, data=image_bytes.getvalue(), proxies=self.proxies_common())
+            response = requests.put(upload_url, data=image_bytes, proxies=self.proxies_common())
 
             if response.status_code == 200:
                 return True
@@ -174,17 +194,16 @@ class SenderTask(AbstractSenderTask[DatedImage]):
                 self.notifier.notify(f"Failed to upload an image to {upload_url} . {failure_status}")
                 return False
 
-        timestamp, image = data
-        upload_url = get_upload_url(timestamp)
+        upload_url = get_upload_url(data)
 
         if upload_url is None:
             return False
 
-        return upload_image(upload_url, image)
+        return upload_image(upload_url, data)
 
-    def _proc(self, data: DatedImage) -> None:
+    def _sender_call(self, data: T) -> bool:
         if not self.has_valid_params():
-            return
+            return False
 
         success = False
         for i in range(self.max_retries):
@@ -204,3 +223,19 @@ class SenderTask(AbstractSenderTask[DatedImage]):
 
         result = "Success" if success else "Failure"
         self.notifier.notify(f"SenderTask Result: {result}")
+        return success
+
+
+
+class SenderTask(SenderTaskGenericDated[DatedImage]):
+    @staticmethod
+    def bytes_from_data(data: DatedImage) -> bytes:
+        _, image = data
+        image_bytes_io = io.BytesIO()
+        image.save(image_bytes_io, format="PNG")
+        return image_bytes_io.getvalue()
+
+    @staticmethod
+    def timestamp_from_data(data: DatedImage) -> str:
+        timestamp, _ = data
+        return timestamp
