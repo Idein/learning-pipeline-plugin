@@ -31,12 +31,13 @@ class AbstractSenderTask(Generic[T], IsolatedTask[T]):
         _ = self._sender_call(data)
 
     def _sender_call(self, data: T) -> bool:
-        # should returl the boolean equal to the success of the operation
-        # can be used by subclass to perform operations on success or failure
+        """Should return the boolean equal to the success of the operation.
+        Can be used by subclass to perform operations on success or failure
+        """
         raise NotImplementedError
 
 
-class SenderTaskGenericDated(Generic[T], AbstractSenderTask[T]):
+class AbstractSenderTaskGenericDated(Generic[T], AbstractSenderTask[T]):
     ServiceClient: Type[ServiceClientProtocol] = ServiceClient
 
     def __init__(self,
@@ -46,7 +47,10 @@ class SenderTaskGenericDated(Generic[T], AbstractSenderTask[T]):
                  max_retries: int = 3,
                  backoff_time_base: float = 60.0,
                  inqueuesize: int = 0):
-        """Isolated task used to send data to the Learning pipeline servers.
+        """Abstract isolated task used to send data to the Learning pipeline servers.
+        A concrete subclass should implement the two static methods: `timestamp_from_data` and
+        `bytes_from_data`.
+
         - pipeline_id (str): ID of the pipeline to send data to (obtained after created a pipeline)
         - metadata (UserMetadata): JSON-like data that will be stored with the image
                                     (e.g. user may include here some act settings)
@@ -58,12 +62,12 @@ class SenderTaskGenericDated(Generic[T], AbstractSenderTask[T]):
 
         Use example:
         ```
-        st = SenderTask(pipeline_id)
+        st = MySenderTask(pipeline_id)
         app.register_task(st)
         st.set_notifier(my_notifier)
 
         ...
-        st.enqueue((time_stamp, image))
+        st.enqueue(my_data)
         ```
         """
         super().__init__(inqueuesize)
@@ -85,10 +89,15 @@ class SenderTaskGenericDated(Generic[T], AbstractSenderTask[T]):
 
     @staticmethod
     def timestamp_from_data(data: T) -> str:
+        """Returns a ISO formated timestamp of the data.
+        """
         raise NotImplementedError
 
     @staticmethod
     def bytes_from_data(data: T) -> bytes:
+        """Returns a bytes object corresponding to the data to be sent.
+        e.g. converts the image inside data to PNG format and returns its bytes.
+        """
         raise NotImplementedError
 
     def backoff(self, attempt: int) -> None:
@@ -227,7 +236,20 @@ class SenderTaskGenericDated(Generic[T], AbstractSenderTask[T]):
         return success
 
 
-class SenderTask(SenderTaskGenericDated[DatedImage]):
+class SenderTask(AbstractSenderTaskGenericDated[DatedImage]):
+    """Isolated task to send data in format (timestamp, image),
+    where timestamp is a ISO formatted string, and image a pillow image.
+    See super class docstring for more informations.
+
+    Use example:
+    ```
+    st = SenderTask(pipeline_id)
+    app.register_task(st)
+    st.set_notifier(my_notifier)
+
+    ...
+    st.enqueue((time_stamp, image))
+    """
     @staticmethod
     def bytes_from_data(data: DatedImage) -> bytes:
         _, image = data
