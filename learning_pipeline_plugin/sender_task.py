@@ -20,7 +20,7 @@ DatedImage = Tuple[str, Image]
 
 class ServiceClientProtocol(Protocol):
     def rs256(self, payload: bytes) -> str:
-        raise NotImplementedError 
+        raise NotImplementedError
 
 
 class AbstractSenderTask(Generic[T], IsolatedTask[T]):
@@ -38,6 +38,7 @@ class AbstractSenderTask(Generic[T], IsolatedTask[T]):
 
 class SenderTaskGenericDated(Generic[T], AbstractSenderTask[T]):
     ServiceClient: Type[ServiceClientProtocol] = ServiceClient
+
     def __init__(self,
                  pipeline_id: str,
                  metadata: Optional[UserMetadata] = None,
@@ -224,7 +225,6 @@ class SenderTaskGenericDated(Generic[T], AbstractSenderTask[T]):
         result = "Success" if success else "Failure"
         self.notifier.notify(f"SenderTask Result: {result}")
         return success
-
 
 
 class SenderTask(SenderTaskGenericDated[DatedImage]):
