@@ -186,6 +186,7 @@ class SenderTask(AbstractSenderTask[DatedImage]):
         if not self.has_valid_params():
             return
 
+        success = False
         for i in range(self.max_retries):
             if not self.has_valid_token():
                 self.update_token()
