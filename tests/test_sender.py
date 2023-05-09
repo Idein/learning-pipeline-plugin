@@ -196,8 +196,6 @@ def test_sender_failed_token(monkeypatch: MonkeyPatch):
     sender.stop()
     sender.join(10)
 
-    sender
-
     """
     flow is as follow:
 
