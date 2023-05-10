@@ -1,4 +1,6 @@
+import sys
 import time
+import traceback
 from queue import Empty, Full, Queue
 from typing import Generic, TypeVar
 
@@ -24,6 +26,7 @@ class IsolatedTask(Generic[T_IN], Isolated):
         try:
             self.in_queue.put_nowait(data)
         except Full:
+            traceback.print_exc(file=sys.stderr)
             return False
         else:
             return True
@@ -39,7 +42,10 @@ class IsolatedTask(Generic[T_IN], Isolated):
             except Empty:
                 time.sleep(1)
             except GeneratorExit:
+                traceback.print_exc(file=sys.stderr)
                 break
+            except:
+                traceback.print_exc(file=sys.stderr)
 
     def _proc(self, data: T_IN) -> None:
         """Isolated task process function.
