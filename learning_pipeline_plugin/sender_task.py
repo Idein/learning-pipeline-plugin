@@ -44,6 +44,8 @@ class AbstractSenderTaskGenericDated(Generic[T], AbstractSenderTask[T]):
                  pipeline_id: str,
                  metadata: Optional[UserMetadata] = None,
                  endpoint_root: str = "https://api.autolearner.actcast.io",
+                 connection_timeout: float = 3.0,
+                 read_timeout: float = 29.0,
                  max_retries: int = 3,
                  backoff_time_base: float = 60.0,
                  inqueuesize: int = 0):
@@ -55,6 +57,9 @@ class AbstractSenderTaskGenericDated(Generic[T], AbstractSenderTask[T]):
         - metadata (UserMetadata): JSON-like data that will be stored with the image
                                     (e.g. user may include here some act settings)
         - endpoint_root (str): endpoint root of the lp API server (https://....)
+        - connection_timeout (float): number of connection timeout seconds. (default: 3.0)
+        - read_timeout (float): number of timeout seconds. (default: 29.0)
+          this parameter is set for connect timeout and read timeout (default: 29.0)
         - max_retries (int): Max number of retry attempts.
         - backoff_time_base (float): The delay time between retry attempts
           is defined by random(backoff_time_base * (2 ** i)) seconds.
@@ -73,6 +78,8 @@ class AbstractSenderTaskGenericDated(Generic[T], AbstractSenderTask[T]):
         super().__init__(inqueuesize)
         self.service_client = self.ServiceClient()
         self.endpoint_root = endpoint_root
+        self.connection_timeout = connection_timeout
+        self.read_timeout = read_timeout
         self.pipeline_id = pipeline_id
         self.notifier: AbstractNotifier = NullNotifier()
         self.user_metadata = {} if metadata is None else metadata
@@ -140,11 +147,20 @@ class AbstractSenderTaskGenericDated(Generic[T], AbstractSenderTask[T]):
             "pipeline_id": self.pipeline_id
         }
 
-        response = requests.get(
-            self.device_token_endpoint,
-            headers=generate_headers(sending_context),
-            proxies=self.proxies_common()
-        )
+        self.device_token = None
+        try:
+            response = requests.get(
+                self.device_token_endpoint,
+                headers=generate_headers(sending_context),
+                proxies=self.proxies_common(),
+                timeout=(self.connection_timeout, self.read_timeout)
+            )
+        except requests.exceptions.ConnectTimeout:
+            self.notifier.notify(f"Connection timeout (endpoint: {self.device_token_endpoint})")
+            return
+        except requests.exceptions.ReadTimeout:
+            self.notifier.notify(f"Read timeout (endpoint: {self.device_token_endpoint})")
+            return
 
         if response.status_code == 200:
             try:
@@ -166,19 +182,28 @@ class AbstractSenderTaskGenericDated(Generic[T], AbstractSenderTask[T]):
     def send_image(self, data: T) -> bool:
         def get_upload_url(data: T) -> Optional[str]:
             timestamp = self.timestamp_from_data(data)
-            response = requests.post(
-                self.collect_requests_endpoint,
-                json={
-                    "timestamp": timestamp,
-                    "act_id": os.environ.get("ACTCAST_ACT_ID"),
-                    "user_data": json.dumps(self.user_metadata)
-                },
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": "Bearer {}".format(self.device_token),
-                },
-                proxies=self.proxies_common()
-            )
+            try:
+                response = requests.post(
+                    self.collect_requests_endpoint,
+                    json={
+                        "timestamp": timestamp,
+                        "act_id": os.environ.get("ACTCAST_ACT_ID"),
+                        "user_data": json.dumps(self.user_metadata)
+                    },
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer {}".format(self.device_token),
+                    },
+                    proxies=self.proxies_common(),
+                    timeout=(self.connection_timeout, self.read_timeout)
+                )
+            except requests.exceptions.ConnectTimeout:
+                self.notifier.notify(f"Connection timeout (endpoint: {self.collect_requests_endpoint})")
+                return None
+            except requests.exceptions.ReadTimeout:
+                self.notifier.notify(f"Read timeout (endpoint: {self.collect_requests_endpoint})")
+                return None
+
             if response.status_code == 200:
                 try:
                     payload = response.json()
@@ -195,7 +220,19 @@ class AbstractSenderTaskGenericDated(Generic[T], AbstractSenderTask[T]):
         def upload_image(upload_url: str, data: T) -> bool:
             image_bytes = self.bytes_from_data(data)
 
-            response = requests.put(upload_url, data=image_bytes, proxies=self.proxies_common())
+            try:
+                response = requests.put(
+                    upload_url,
+                    data=image_bytes,
+                    proxies=self.proxies_common(),
+                    timeout=(self.connection_timeout, self.read_timeout)
+                )
+            except requests.exceptions.ConnectTimeout:
+                self.notifier.notify(f"Connection timeout (endpoint: {upload_url})")
+                return False
+            except requests.exceptions.ReadTimeout:
+                self.notifier.notify(f"Read timeout (endpoint: {upload_url})")
+                return False
 
             if response.status_code == 200:
                 return True
