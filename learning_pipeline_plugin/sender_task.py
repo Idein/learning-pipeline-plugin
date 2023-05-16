@@ -161,6 +161,9 @@ class AbstractSenderTaskGenericDated(Generic[T], AbstractSenderTask[T]):
         except requests.exceptions.ReadTimeout:
             self.notifier.notify(f"Read timeout (endpoint: {self.device_token_endpoint})")
             return
+        except requests.exceptions.RequestException:
+            self.notifier.notify(f"Request failure (endpoint: {self.collect_requests_endpoint})")
+            return
 
         if response.status_code == 200:
             try:
@@ -203,6 +206,9 @@ class AbstractSenderTaskGenericDated(Generic[T], AbstractSenderTask[T]):
             except requests.exceptions.ReadTimeout:
                 self.notifier.notify(f"Read timeout (endpoint: {self.collect_requests_endpoint})")
                 return None
+            except requests.exceptions.RequestException:
+                self.notifier.notify(f"Request failure (endpoint: {self.collect_requests_endpoint})")
+                return None
 
             if response.status_code == 200:
                 try:
@@ -232,6 +238,9 @@ class AbstractSenderTaskGenericDated(Generic[T], AbstractSenderTask[T]):
                 return False
             except requests.exceptions.ReadTimeout:
                 self.notifier.notify(f"Read timeout (endpoint: {upload_url})")
+                return False
+            except requests.exceptions.RequestException:
+                self.notifier.notify(f"Request failure (endpoint: {self.collect_requests_endpoint})")
                 return False
 
             if response.status_code == 200:
