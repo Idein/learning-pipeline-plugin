@@ -12,7 +12,6 @@ class PseudoPipe(Generic[T_IN], _ConsumerMixin[T_IN]):
     c = MyConsumer(...)
     pp = PseudoPipe()
 
-
     p.connect(c) 
     # is the same as
     p.connect(pp)
