@@ -72,3 +72,4 @@ class IsolatedTaskSingleBuffer(Generic[T_IN], IsolatedTask[T_IN]):
                 pass
 
         return super().enqueue(data)
+
