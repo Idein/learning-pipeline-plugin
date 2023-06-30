@@ -10,7 +10,7 @@ repository = "https://github.com/Idein/learning-pipeline-plugin"
 
 
 [tool.poetry.dependencies]
-python = ">=3.7.0"
+python = ">=3.7.0, <3.11"
 actfw-core = "^2.2.0"
 requests = {extras = ["socks"], version = "^2.28.1"}
 numpy = "~1"
