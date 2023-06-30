@@ -16,7 +16,7 @@ requests = {extras = ["socks"], version = "^2.28.1"}
 numpy = "~1"
 typing-extensions = "^4.4.0"
 pillow = [
-    {version = "^6", python = "< 3.8"},
+    {version = "^5", python = "< 3.8"},
     {version = "^8", python = ">= 3.8"},
 ]
 
