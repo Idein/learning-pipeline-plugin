@@ -28,8 +28,10 @@ jobs:
         echo "wheel_path=${wheel_path}" >> $GITHUB_OUTPUT
         echo "wheel_name=${wheel_path##*/}" >> $GITHUB_OUTPUT
     - name: Publish PyPI
+      env:
+        POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_TOKEN }}
       run: |
-        poetry publish --username '${{secrets.PYPI_USERNAME}}' --password '${{secrets.PYPI_PASSWORD}}'
+        poetry publish
     - name: Get release
       id: get_release
       uses: bruceadams/get-release@v1.3.2
